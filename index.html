@@ -722,7 +722,7 @@
               · 请求格式：<code>POST JSON {"image":"data:image/jpeg;base64,...","threshold":0.25,"source":"camera"}</code>。<br />
               · 返回格式：<code>{"detections":[{"class":"no_helmet","confidence":0.93,"bbox":[x,y,w,h]}]}</code>，bbox 默认像素坐标，也支持 <code>normalized:true</code> 或 <code>bbox_format:"xyxy"</code>。<br />
               · 类别名支持 no_helmet / no_vest / climb 等英文或「未戴安全帽 / 未穿反光衣 / 翻越护栏」中文。<br />
-              · 页面始终使用真实模型输出；接口暂时不可用时每 5 秒自动重连，不回退演示数据。
+              · 页面始终使用真实模型输出；接口不可用时停止请求，重新开始检测或保存配置后再重试。
             </div>
           </div>
         </div>
@@ -1166,9 +1166,9 @@
       e.style.color = "#3fb950";
       if (chip) { chip.className = "mode-chip live"; chip.innerHTML = "<i></i>真实检测模式"; }
     } else {
-      e.textContent = "YOLO · 接口重连中";
+      e.textContent = "YOLO · 接口未连接";
       e.style.color = "#d29922";
-      if (chip) { chip.className = "mode-chip live"; chip.innerHTML = "<i></i>真实检测模式 · 重连中"; }
+      if (chip) { chip.className = "mode-chip live"; chip.innerHTML = "<i></i>真实检测模式 · 接口未连接"; }
     }
   }
 
@@ -1437,19 +1437,19 @@
         var wasOk = state.apiOk;
         state.apiOk = false;
         state.apiLogged = false;
-        state.apiRetryAt = Date.now() + 5000;
+        state.apiRetryAt = Infinity;
         clearOverlay();
         updateEngine();
         if (wasOk) {
-          addLog("cfg", "检测接口中断，5 秒后自动重连（保持真实检测模式）：" + (err && err.message ? err.message : "请求失败"));
+          addLog("cfg", "检测接口连接失败，已停止请求（保持真实检测模式）：" + (err && err.message ? err.message : "请求失败"));
           var st = $("apiStatus");
-          if (st) { st.className = "api-status err"; st.textContent = "检测接口暂时不可用：" + (err && err.message ? err.message : "未知错误") + "，5 秒后自动重连（不使用演示数据）。"; }
+          if (st) { st.className = "api-status err"; st.textContent = "检测接口连接失败：" + (err && err.message ? err.message : "未知错误") + "，已停止请求；重新开始检测或保存配置后会再次尝试。"; }
         }
       });
     } catch (e) {
       state.apiBusy = false;
       if (timer) window.clearTimeout(timer);
-      state.apiRetryAt = Date.now() + 5000;
+      state.apiRetryAt = Infinity;
       clearOverlay();
       updateEngine();
     }
@@ -1747,6 +1747,7 @@
   }
   function start() {
     if (state.tick) return;
+    state.apiRetryAt = 0;
     state.tick = window.setInterval(tick, 1000);
     state.cycle = window.setInterval(detectCycle, 1000);
     if (state.overlayTimer) window.clearInterval(state.overlayTimer);
@@ -2295,7 +2296,7 @@
       if (settled) return;
       settled = true;
       out.className = "api-status err";
-      out.textContent = "连接超时：未检测到后端服务，页面会每 5 秒自动重连（不使用演示数据）。";
+      out.textContent = "连接超时：未检测到后端服务，已停止请求，重新开始检测或保存配置后再试。";
     }, 5000);
 
     try {
@@ -2310,7 +2311,7 @@
         settled = true;
         window.clearTimeout(timer);
         out.className = "api-status err";
-        out.textContent = "无法连接 " + url + "。页面会每 5 秒自动重连，不使用演示数据。";
+        out.textContent = "无法连接 " + url + "。已停止请求，重新开始检测或保存配置后再试。";
       });
     } catch (e) {
       window.clearTimeout(timer);
